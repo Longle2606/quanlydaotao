@@ -1,0 +1,6 @@
+{
+  "name": "Quản Lý Đào Tạo",
+  "description": "Hệ thống quản lý thông tin nhân viên, khoa phòng, chức danh và các chương trình đào tạo trực tiếp, trực tuyến.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
