@@ -67,7 +67,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
     e.target.value = '';
   };
 
-  // Hàm tải danh sách nhân viên tham dự cho riêng 1 chương trình
   const handleDownloadSingleProgramAttendees = (program: TrainingProgram) => {
     const participantIds = program.participantIds || [];
     if (participantIds.length === 0) {
@@ -75,10 +74,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
       return;
     }
 
-    // Lọc ra danh sách nhân viên có ID nằm trong chương trình
     const attendingEmployees = employees.filter(emp => participantIds.includes(String(emp.id)));
 
-    // Tạo nội dung file CSV chuẩn tiếng Việt (BOM \uFEFF)
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "STT,Mã nhân viên,Họ và tên,Chức vụ,Khoa/Phòng,Email,Số điện thoại\n";
 
@@ -95,7 +92,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
       csvContent += row + "\n";
     });
 
-    // Kích hoạt tải file xuống trình duyệt
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -142,7 +138,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
         className="hidden"
       />
 
-      {/* Top Header & Main Action */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -201,7 +196,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
         </div>
       </div>
 
-      {/* Filter & Date Range Bar */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="relative lg:col-span-2">
@@ -270,7 +264,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
         </div>
       </div>
 
-      {/* Program Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredPrograms.length === 0 ? (
           <div className="col-span-full py-16 bg-white rounded-2xl border border-slate-200 text-center text-slate-400">
@@ -285,7 +278,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
                 key={program.id}
                 className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden group"
               >
-                {/* Card Top */}
                 <div className="p-5 space-y-3">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
@@ -327,7 +319,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Card Footer: Enrolled Employees & Actions */}
                 <div className="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
@@ -339,7 +330,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
                       <span>{program.participantIds.length} NV</span>
                     </button>
 
-                    {/* Nút Tải danh sách nhân viên tham dự riêng cho từng chương trình */}
                     <button
                       onClick={() => handleDownloadSingleProgramAttendees(program)}
                       className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1"
