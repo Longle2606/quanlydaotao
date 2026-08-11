@@ -5,12 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Employee, TrainingProgram, ActiveTab } from './types';
+import { supabase } from './supabaseClient'; // 👈 Import Supabase client đã tạo
 import { 
-  loadEmployees, 
-  saveEmployees, 
-  loadPrograms, 
-  savePrograms, 
-  resetToSampleData,
   exportEmployeesCSV,
   exportProgramsCSV
 } from './utils/storage';
@@ -29,6 +25,7 @@ export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -50,6 +47,14 @@ export default function App() {
 
   const [notification, setNotification] = useState<string | null>(null);
 
+  // Show auto-dismiss notification
+  const notify = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => {
+      setNotification(null);
+    }, 3000);
+  };
+
   // Auth Handlers
   const handleLoginSuccess = (username: string) => {
     setIsAuthenticated(true);
@@ -65,46 +70,41 @@ export default function App() {
     localStorage.removeItem('training_app_user');
   };
 
-  // Load initial data
-  useEffect(() => {
-    localStorage.removeItem('daotao_app_employees_v1');
-    localStorage.removeItem('daotao_app_programs_v1');
-    const loadedEmps = loadEmployees();
-    const loadedProgs = loadPrograms();
-    setEmployees(loadedEmps);
-    setPrograms(loadedProgs);
-  }, []);
+  // 🔄 1. FETCH DATA TỪ SUPABASE KHI MỞ TRANG
+  const fetchDataFromSupabase = async () => {
+    setIsLoading(true);
+    try {
+      // Lấy danh sách nhân viên từ Supabase
+      const { data: empData, error: empError } = await supabase
+        .from('employees')
+        .select('*')
+        .order('createdAt', { ascending: false });
 
-  // Show auto-dismiss notification
-  const notify = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => {
-      setNotification(null);
-    }, 3000);
-  };
+      if (empError) console.error('Lỗi lấy danh sách nhân viên:', empError.message);
+      else setEmployees(empData || []);
 
-  // Sync state & local storage
-  const updateEmployees = (newEmps: Employee[]) => {
-    setEmployees(newEmps);
-    saveEmployees(newEmps);
-  };
+      // Lấy danh sách khóa đào tạo từ Supabase
+      const { data: progData, error: progError } = await supabase
+        .from('programs')
+        .select('*')
+        .order('createdAt', { ascending: false });
 
-  const updatePrograms = (newProgs: TrainingProgram[]) => {
-    setPrograms(newProgs);
-    savePrograms(newProgs);
-  };
-
-  // Reset demo data handler
-  const handleResetData = () => {
-    if (window.confirm('Bạn có chắc chắn muốn khôi phục dữ liệu mẫu ban đầu?')) {
-      const { employees: initialEmps, programs: initialProgs } = resetToSampleData();
-      setEmployees(initialEmps);
-      setPrograms(initialProgs);
-      notify('Đã khôi phục dữ liệu mẫu ban đầu thành công!');
+      if (progError) console.error('Lỗi lấy danh sách khóa học:', progError.message);
+      else setPrograms(progData || []);
+    } catch (err) {
+      console.error('Lỗi kết nối Supabase:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Employee CRUD handlers
+  useEffect(() => {
+    fetchDataFromSupabase();
+  }, []);
+
+  // ----------------------------------------------------
+  // 👤 EMPLOYEE CRUD HANDLERS (KẾT NỐI SUPABASE)
+  // ----------------------------------------------------
   const handleOpenAddEmployee = () => {
     setEmployeeToEdit(null);
     setIsEmployeeFormOpen(true);
@@ -115,14 +115,22 @@ export default function App() {
     setIsEmployeeFormOpen(true);
   };
 
-  const handleSaveEmployee = (empData: Partial<Employee>) => {
+  const handleSaveEmployee = async (empData: Partial<Employee>) => {
     if (employeeToEdit) {
-      // Update existing
-      const updated = employees.map(e => e.id === employeeToEdit.id ? { ...e, ...empData } as Employee : e);
-      updateEmployees(updated);
-      notify(`Đã cập nhật thông tin nhân viên "${empData.fullName}"`);
+      // Update existing employee in Supabase
+      const { error } = await supabase
+        .from('employees')
+        .update(empData)
+        .eq('id', employeeToEdit.id);
+
+      if (error) {
+        notify(`Lỗi cập nhật: ${error.message}`);
+      } else {
+        fetchDataFromSupabase();
+        notify(`Đã cập nhật thông tin nhân viên "${empData.fullName}"`);
+      }
     } else {
-      // Add new
+      // Add new employee to Supabase
       const newEmp: Employee = {
         id: `emp-${Date.now()}`,
         code: empData.code || `NV${Math.floor(100 + Math.random() * 900)}`,
@@ -134,31 +142,42 @@ export default function App() {
         status: empData.status || 'active',
         createdAt: new Date().toISOString().slice(0, 10)
       };
-      updateEmployees([newEmp, ...employees]);
-      notify(`Đã thêm mới nhân viên "${newEmp.fullName}"`);
+
+      const { error } = await supabase
+        .from('employees')
+        .insert([newEmp]);
+
+      if (error) {
+        notify(`Lỗi thêm mới: ${error.message}`);
+      } else {
+        fetchDataFromSupabase();
+        notify(`Đã thêm mới nhân viên "${newEmp.fullName}"`);
+      }
     }
   };
 
-  const handleDeleteEmployee = (empId: string) => {
+  const handleDeleteEmployee = async (empId: string) => {
     const target = employees.find(e => e.id === empId);
     if (!target) return;
 
     if (window.confirm(`Bạn có chắc muốn xóa nhân viên "${target.fullName}"?`)) {
-      const filtered = employees.filter(e => e.id !== empId);
-      updateEmployees(filtered);
+      const { error } = await supabase
+        .from('employees')
+        .delete()
+        .eq('id', empId);
 
-      // Also clean up from program participant lists
-      const updatedProgs = programs.map(p => ({
-        ...p,
-        participantIds: p.participantIds.filter(id => id !== empId)
-      }));
-      updatePrograms(updatedProgs);
-
-      notify(`Đã xóa nhân viên "${target.fullName}" khỏi hệ thống.`);
+      if (error) {
+        notify(`Lỗi khi xóa: ${error.message}`);
+      } else {
+        fetchDataFromSupabase();
+        notify(`Đã xóa nhân viên "${target.fullName}" khỏi hệ thống.`);
+      }
     }
   };
 
-  // Training Program CRUD handlers
+  // ----------------------------------------------------
+  // 📚 TRAINING PROGRAM CRUD HANDLERS (KẾT NỐI SUPABASE)
+  // ----------------------------------------------------
   const handleOpenAddProgram = () => {
     setProgramToEdit(null);
     setIsProgramFormOpen(true);
@@ -169,12 +188,20 @@ export default function App() {
     setIsProgramFormOpen(true);
   };
 
-  const handleSaveProgram = (progData: Partial<TrainingProgram>) => {
+  const handleSaveProgram = async (progData: Partial<TrainingProgram>) => {
     if (programToEdit) {
       // Update existing program
-      const updated = programs.map(p => p.id === programToEdit.id ? { ...p, ...progData } as TrainingProgram : p);
-      updatePrograms(updated);
-      notify(`Đã cập nhật chương trình đào tạo "${progData.title}"`);
+      const { error } = await supabase
+        .from('programs')
+        .update(progData)
+        .eq('id', programToEdit.id);
+
+      if (error) {
+        notify(`Lỗi cập nhật: ${error.message}`);
+      } else {
+        fetchDataFromSupabase();
+        notify(`Đã cập nhật chương trình đào tạo "${progData.title}"`);
+      }
     } else {
       // Add new program
       const newProg: TrainingProgram = {
@@ -191,45 +218,73 @@ export default function App() {
         status: progData.status || 'upcoming',
         createdAt: new Date().toISOString().slice(0, 10)
       };
-      updatePrograms([newProg, ...programs]);
-      notify(`Đã tạo khóa đào tạo mới "${newProg.title}"`);
+
+      const { error } = await supabase
+        .from('programs')
+        .insert([newProg]);
+
+      if (error) {
+        notify(`Lỗi tạo khóa học: ${error.message}`);
+      } else {
+        fetchDataFromSupabase();
+        notify(`Đã tạo khóa đào tạo mới "${newProg.title}"`);
+      }
     }
   };
 
-  const handleDeleteProgram = (progId: string) => {
+  const handleDeleteProgram = async (progId: string) => {
     const target = programs.find(p => p.id === progId);
     if (!target) return;
 
     if (window.confirm(`Bạn có chắc muốn xóa chương trình đào tạo "${target.title}"?`)) {
-      const filtered = programs.filter(p => p.id !== progId);
-      updatePrograms(filtered);
-      notify(`Đã xóa chương trình đào tạo.`);
+      const { error } = await supabase
+        .from('programs')
+        .delete()
+        .eq('id', progId);
+
+      if (error) {
+        notify(`Lỗi khi xóa: ${error.message}`);
+      } else {
+        fetchDataFromSupabase();
+        notify(`Đã xóa chương trình đào tạo.`);
+      }
     }
   };
 
-  // Update participant list for a specific program
-  const handleUpdateProgramParticipants = (programId: string, updatedParticipantIds: string[]) => {
-    const updated = programs.map(p => p.id === programId ? { ...p, participantIds: updatedParticipantIds } : p);
-    updatePrograms(updated);
+  const handleUpdateProgramParticipants = async (programId: string, updatedParticipantIds: string[]) => {
+    const { error } = await supabase
+      .from('programs')
+      .update({ participantIds: updatedParticipantIds })
+      .eq('id', programId);
 
-    // Keep detail modal state fresh
-    if (selectedProgramForDetail && selectedProgramForDetail.id === programId) {
-      setSelectedProgramForDetail({ ...selectedProgramForDetail, participantIds: updatedParticipantIds });
+    if (error) {
+      notify(`Lỗi cập nhật danh sách: ${error.message}`);
+    } else {
+      fetchDataFromSupabase();
+      if (selectedProgramForDetail && selectedProgramForDetail.id === programId) {
+        setSelectedProgramForDetail({ ...selectedProgramForDetail, participantIds: updatedParticipantIds });
+      }
+      notify('Đã cập nhật danh sách nhân viên tham dự khóa đào tạo.');
     }
-    notify('Đã cập nhật danh sách nhân viên tham dự khóa đào tạo.');
   };
 
-  // Import handlers for Excel/CSV
-  const handleImportEmployees = (importedList: Employee[]) => {
-    const updated = [...importedList, ...employees];
-    updateEmployees(updated);
-    notify(`Đã nhập thành công ${importedList.length} nhân viên từ file Excel/CSV!`);
+  // Import handlers
+  const handleImportEmployees = async (importedList: Employee[]) => {
+    const { error } = await supabase.from('employees').insert(importedList);
+    if (error) notify(`Lỗi Import: ${error.message}`);
+    else {
+      fetchDataFromSupabase();
+      notify(`Đã nhập thành công ${importedList.length} nhân viên từ file Excel/CSV!`);
+    }
   };
 
-  const handleImportPrograms = (importedList: TrainingProgram[]) => {
-    const updated = [...importedList, ...programs];
-    updatePrograms(updated);
-    notify(`Đã nhập thành công ${importedList.length} chương trình đào tạo từ file Excel/CSV!`);
+  const handleImportPrograms = async (importedList: TrainingProgram[]) => {
+    const { error } = await supabase.from('programs').insert(importedList);
+    if (error) notify(`Lỗi Import: ${error.message}`);
+    else {
+      fetchDataFromSupabase();
+      notify(`Đã nhập thành công ${importedList.length} chương trình đào tạo!`);
+    }
   };
 
   if (!isAuthenticated) {
@@ -242,7 +297,7 @@ export default function App() {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onResetData={handleResetData}
+        onResetData={fetchDataFromSupabase}
         onExportEmployees={() => exportEmployeesCSV(employees)}
         onExportPrograms={() => exportProgramsCSV(programs, employees)}
         onOpenAddEmployee={handleOpenAddEmployee}
@@ -253,7 +308,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Main Toast Notification */}
+      {/* Toast Notification */}
       {notification && (
         <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-2xl border border-slate-700 animate-bounce flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
@@ -261,42 +316,50 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Container View */}
+      {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'dashboard' && (
-          <DashboardView
-            employees={employees}
-            programs={programs}
-            onSelectProgram={(prog) => setSelectedProgramForDetail(prog)}
-            onGoToPrograms={() => setActiveTab('programs')}
-            onGoToEmployees={() => setActiveTab('employees')}
-          />
-        )}
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64 text-slate-500 text-sm">
+            Đang tải dữ liệu từ Supabase...
+          </div>
+        ) : (
+          <>
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                employees={employees}
+                programs={programs}
+                onSelectProgram={(prog) => setSelectedProgramForDetail(prog)}
+                onGoToPrograms={() => setActiveTab('programs')}
+                onGoToEmployees={() => setActiveTab('employees')}
+              />
+            )}
 
-        {activeTab === 'employees' && (
-          <EmployeesView
-            employees={employees}
-            programs={programs}
-            onAddEmployee={handleOpenAddEmployee}
-            onEditEmployee={handleOpenEditEmployee}
-            onDeleteEmployee={handleDeleteEmployee}
-            onViewHistory={(emp) => setSelectedEmployeeForHistory(emp)}
-            onExportEmployees={(dept) => exportEmployeesCSV(employees, dept)}
-            onImportEmployees={handleImportEmployees}
-          />
-        )}
+            {activeTab === 'employees' && (
+              <EmployeesView
+                employees={employees}
+                programs={programs}
+                onAddEmployee={handleOpenAddEmployee}
+                onEditEmployee={handleOpenEditEmployee}
+                onDeleteEmployee={handleDeleteEmployee}
+                onViewHistory={(emp) => setSelectedEmployeeForHistory(emp)}
+                onExportEmployees={(dept) => exportEmployeesCSV(employees, dept)}
+                onImportEmployees={handleImportEmployees}
+              />
+            )}
 
-        {activeTab === 'programs' && (
-          <ProgramsView
-            programs={programs}
-            employees={employees}
-            onAddProgram={handleOpenAddProgram}
-            onEditProgram={handleOpenEditProgram}
-            onDeleteProgram={handleDeleteProgram}
-            onManageParticipants={(prog) => setSelectedProgramForDetail(prog)}
-            onExportPrograms={() => exportProgramsCSV(programs, employees)}
-            onImportPrograms={handleImportPrograms}
-          />
+            {activeTab === 'programs' && (
+              <ProgramsView
+                programs={programs}
+                employees={employees}
+                onAddProgram={handleOpenAddProgram}
+                onEditProgram={handleOpenEditProgram}
+                onDeleteProgram={handleDeleteProgram}
+                onManageParticipants={(prog) => setSelectedProgramForDetail(prog)}
+                onExportPrograms={() => exportProgramsCSV(programs, employees)}
+                onImportPrograms={handleImportPrograms}
+              />
+            )}
+          </>
         )}
       </main>
 
@@ -304,7 +367,7 @@ export default function App() {
       <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>Hệ Thống Quản Lý Đào Tạo & Bồi Dưỡng Nhân Sự</span>
-          <span className="text-slate-400">Đào Tạo Trực Tiếp & Trực Tuyến • Tích hợp báo cáo CSV</span>
+          <span className="text-slate-400">Đào Tạo Trực Tiếp & Trực Tuyến • Tích hợp Supabase Cloud</span>
         </div>
       </footer>
 

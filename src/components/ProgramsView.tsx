@@ -67,18 +67,53 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
     e.target.value = '';
   };
 
+  // Hàm tải danh sách nhân viên tham dự cho riêng 1 chương trình
+  const handleDownloadSingleProgramAttendees = (program: TrainingProgram) => {
+    const participantIds = program.participantIds || [];
+    if (participantIds.length === 0) {
+      alert('Chưa có nhân viên nào tham gia chương trình này.');
+      return;
+    }
+
+    // Lọc ra danh sách nhân viên có ID nằm trong chương trình
+    const attendingEmployees = employees.filter(emp => participantIds.includes(String(emp.id)));
+
+    // Tạo nội dung file CSV chuẩn tiếng Việt (BOM \uFEFF)
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "STT,Mã nhân viên,Họ và tên,Chức vụ,Khoa/Phòng,Email,Số điện thoại\n";
+
+    attendingEmployees.forEach((emp: any, index: number) => {
+      const row = [
+        index + 1,
+        `"${emp.code || emp.id || ''}"`,
+        `"${emp.fullName || emp.full_name || emp['Họ và Tên'] || ''}"`,
+        `"${emp.position || emp['Chức Danh'] || ''}"`,
+        `"${emp.department || emp['Khoa/Phòng'] || ''}"`,
+        `"${emp.email || ''}"`,
+        `"${emp.phone || ''}"`
+      ].join(",");
+      csvContent += row + "\n";
+    });
+
+    // Kích hoạt tải file xuống trình duyệt
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `danh_sach_tham_du_${program.code || 'chuong_trinh'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filteredPrograms = programs.filter(prog => {
-    // Text search
     const matchesSearch = 
       prog.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prog.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prog.instructor.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prog.locationOrLink.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Type filter
     const matchesType = !selectedType || prog.type === selectedType;
 
-    // Date range filter
     let matchesDate = true;
     if (fromDate && prog.endDate < fromDate) {
       matchesDate = false;
@@ -99,7 +134,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Hidden File Input for Excel/CSV Import */}
       <input
         type="file"
         ref={fileInputRef}
@@ -121,7 +155,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Tải File Mẫu Excel/CSV */}
           <button
             onClick={downloadProgramTemplateCSV}
             title="Tải file mẫu Excel/CSV nhập danh sách chương trình đào tạo"
@@ -131,7 +164,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
             <span>Tải File Mẫu</span>
           </button>
 
-          {/* Nhập từ File Excel/CSV */}
           <button
             onClick={() => fileInputRef.current?.click()}
             title="Tải lên file Excel/CSV để thêm hàng loạt khóa đào tạo"
@@ -141,7 +173,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
             <span>Nhập File Excel/CSV</span>
           </button>
 
-          {/* Export Without Participants List */}
           <button
             onClick={() => exportProgramsCSV(filteredPrograms, employees, false)}
             title="Xuất báo cáo tổng quan chương trình đào tạo (Không kèm danh sách nhân viên)"
@@ -151,7 +182,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
             <span>Xuất Báo Cáo (Không DS NV)</span>
           </button>
 
-          {/* Export With Detailed Participants List */}
           <button
             onClick={() => exportProgramsCSV(filteredPrograms, employees, true)}
             title="Xuất báo cáo chi tiết kèm tên danh sách nhân viên tham dự"
@@ -174,7 +204,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
       {/* Filter & Date Range Bar */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Search Box */}
           <div className="relative lg:col-span-2">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -186,7 +215,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
             />
           </div>
 
-          {/* Type Filter */}
           <div className="relative">
             <select
               value={selectedType}
@@ -199,7 +227,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
             </select>
           </div>
 
-          {/* Reset button */}
           <button
             onClick={resetFilters}
             className="text-xs text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg transition flex items-center justify-center gap-1"
@@ -209,7 +236,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
           </button>
         </div>
 
-        {/* Date Range Picker Row (Từ ngày -> Đến ngày) */}
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 text-xs">
           <span className="font-semibold text-slate-700 flex items-center gap-1">
             <Calendar className="w-4 h-4 text-indigo-600" />
@@ -266,7 +292,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
                       {program.code}
                     </span>
 
-                    {/* Format Badge */}
                     {isOnline ? (
                       <span className="bg-sky-50 text-sky-700 border border-sky-200 text-xs px-2.5 py-0.5 rounded-full font-semibold inline-flex items-center gap-1">
                         <Video className="w-3 h-3" /> Trực tuyến
@@ -278,7 +303,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
                     )}
                   </div>
 
-                  {/* Title */}
                   <h3 
                     onClick={() => onManageParticipants(program)}
                     className="font-bold text-slate-900 text-base line-clamp-2 hover:text-indigo-600 transition cursor-pointer"
@@ -286,7 +310,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
                     {program.title}
                   </h3>
 
-                  {/* Program Meta */}
                   <div className="space-y-1.5 text-xs text-slate-600 pt-1">
                     <div className="flex items-center gap-2 font-medium">
                       <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />
@@ -305,15 +328,27 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({
                 </div>
 
                 {/* Card Footer: Enrolled Employees & Actions */}
-                <div className="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => onManageParticipants(program)}
-                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"
-                    title="Quản lý nhân viên tham dự"
-                  >
-                    <Users className="w-4 h-4" />
-                    <span>{program.participantIds.length} nhân viên tham dự</span>
-                  </button>
+                <div className="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => onManageParticipants(program)}
+                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1"
+                      title="Quản lý nhân viên tham dự"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{program.participantIds.length} NV</span>
+                    </button>
+
+                    {/* Nút Tải danh sách nhân viên tham dự riêng cho từng chương trình */}
+                    <button
+                      onClick={() => handleDownloadSingleProgramAttendees(program)}
+                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1"
+                      title="Tải danh sách nhân viên tham dự khóa học này"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Tải danh sách</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-1">
                     <button

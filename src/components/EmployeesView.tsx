@@ -6,16 +6,12 @@ import { downloadEmployeeTemplateCSV, parseEmployeesCSVText } from '../utils/csv
 import { 
   Search, 
   Plus, 
-  Filter, 
   Edit3, 
   Trash2, 
   History, 
   UserCheck, 
-  UserX, 
   Building2, 
   Briefcase,
-  Phone,
-  Mail,
   X,
   FileSpreadsheet,
   Download,
@@ -30,7 +26,7 @@ interface EmployeesViewProps {
   onEditEmployee: (employee: Employee) => void;
   onDeleteEmployee: (id: string) => void;
   onViewHistory: (employee: Employee) => void;
-  onExportEmployees: (departmentName?: string) => void;
+  onExportEmployees?: (departmentName?: string) => void;
   onImportEmployees: (importedList: Employee[]) => void;
 }
 
@@ -41,18 +37,18 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
   onEditEmployee,
   onDeleteEmployee,
   onViewHistory,
-  onExportEmployees,
   onImportEmployees
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('');
 
-  // Multi-employee selection state for exporting training history
+  // Trạng thái chọn nhiều nhân viên để xuất lịch sử đào tạo
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Xử lý upload file Excel/CSV
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -73,20 +69,21 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
     e.target.value = '';
   };
 
-  // Count training courses per employee
+  // Đếm số lượng khóa học của từng nhân viên
   const courseCountMap = new Map<string, number>();
   programs.forEach(p => {
-    p.participantIds.forEach(id => {
-      courseCountMap.set(id, (courseCountMap.get(id) || 0) + 1);
+    (p.participantIds || []).forEach(id => {
+      courseCountMap.set(String(id), (courseCountMap.get(String(id)) || 0) + 1);
     });
   });
 
-  // Filter logic
+  // Logic lọc danh sách nhân viên
   const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = 
-      emp.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.position.toLowerCase().includes(searchQuery.toLowerCase());
+    const query = searchQuery.toLowerCase().trim();
+    const matchesSearch = !query || 
+      emp.fullName.toLowerCase().includes(query) ||
+      emp.department.toLowerCase().includes(query) ||
+      emp.position.toLowerCase().includes(query);
 
     const matchesDept = !selectedDept || emp.department === selectedDept;
     const matchesPosition = !selectedPosition || emp.position === selectedPosition;
@@ -94,7 +91,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
     return matchesSearch && matchesDept && matchesPosition;
   });
 
-  // Checkbox selection logic
+  // Logic Checkbox chọn tất cả
   const isAllSelected = filteredEmployees.length > 0 && filteredEmployees.every(e => selectedIds.includes(e.id));
 
   const toggleSelectAll = () => {
@@ -113,6 +110,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
     }
   };
 
+  // Xuất lịch sử đào tạo của các nhân viên đã tích chọn
   const handleExportSelectedHistory = () => {
     const selectedEmps = employees.filter(e => selectedIds.includes(e.id));
     if (selectedEmps.length === 0) return;
@@ -121,7 +119,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Hidden File Input for Excel/CSV Import */}
+      {/* Input file ẩn phục vụ Nhập dữ liệu */}
       <input
         type="file"
         ref={fileInputRef}
@@ -130,7 +128,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
         className="hidden"
       />
 
-      {/* Top Action & Header */}
+      {/* Header & Các nút thao tác chính */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -138,12 +136,12 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
             Danh Sách Nhân Viên
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Quản lý thông tin chi tiết nhân sự, khoa/phòng, chức danh, xuất báo cáo theo khoa/phòng & nhập file Excel.
+            Quản lý thông tin chi tiết nhân sự, khoa/phòng, chức danh, xuất báo cáo & nhập file danh sách.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Tải File Mẫu Excel/CSV */}
+          {/* Tải File Mẫu */}
           <button
             onClick={downloadEmployeeTemplateCSV}
             title="Tải file mẫu Excel/CSV nhập danh sách nhân viên"
@@ -173,7 +171,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
             <span>{selectedDept ? `Xuất NV (${selectedDept})` : 'Xuất Danh Sách CSV'}</span>
           </button>
 
-          {/* Thêm NV Mới thủ công */}
+          {/* Thêm NV Mới */}
           <button
             onClick={onAddEmployee}
             className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/20 flex items-center gap-1.5"
@@ -184,9 +182,9 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
         </div>
       </div>
 
-      {/* Search & Filters Toolbar */}
+      {/* Thanh Tìm Kiếm & Bộ Lọc */}
       <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Search */}
+        {/* Ô Tìm Kiếm */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -194,7 +192,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
             placeholder="Tìm theo họ và tên, khoa/phòng, chức danh..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+            className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
           />
           {searchQuery && (
             <button
@@ -206,7 +204,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
           )}
         </div>
 
-        {/* Filter Department */}
+        {/* Lọc Theo Khoa / Phòng */}
         <div className="relative">
           <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <select
@@ -221,7 +219,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
           </select>
         </div>
 
-        {/* Filter Position */}
+        {/* Lọc Theo Chức Danh */}
         <div className="relative">
           <Briefcase className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <select
@@ -237,7 +235,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
         </div>
       </div>
 
-      {/* Selection Action Bar (when 1 or more employees selected) */}
+      {/* Thanh Thao Tác Hàng Loạt (Hiện ra khi tích chọn nhân viên) */}
       {selectedIds.length > 0 && (
         <div className="bg-indigo-900 text-white rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in border border-indigo-700">
           <div className="flex items-center gap-2">
@@ -245,7 +243,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
               Đã chọn {selectedIds.length} nhân viên
             </span>
             <span className="text-xs text-indigo-200 hidden md:inline">
-              (Có thể chọn 1 hoặc nhiều nhân viên để xuất lịch sử các chương trình đào tạo đã tham dự)
+              (Có thể chọn nhiều nhân viên để xuất báo cáo các khóa đào tạo đã tham dự)
             </span>
           </div>
 
@@ -268,7 +266,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
         </div>
       )}
 
-      {/* Employees Data Table */}
+      {/* Bảng Dữ Liệu Nhân Viên */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -369,7 +367,6 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                         <button
                           onClick={() => onEditEmployee(employee)}
                           className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                          title="Chỉnh sửa thông tin"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -390,7 +387,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
           </table>
         </div>
 
-        {/* Footer Summary */}
+        {/* Footer Tổng Số */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
           <span>Hiển thị <strong>{filteredEmployees.length}</strong> / {employees.length} nhân viên</span>
         </div>
